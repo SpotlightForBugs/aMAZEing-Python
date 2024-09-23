@@ -1,4 +1,9 @@
+from os import environ
 
+# TODO: bounding box explodes upon MAZE_SIZE_X != MAZE_SIZE_Y
+# TODO P2: visual indicator for start_pos and end_pos should scale with blablabla(CELL_SIZE_X, CELL_SIZE_Y)
+
+environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 import math
 import random
@@ -11,10 +16,13 @@ from pygame.locals import *
 SCREEN_SIZE_X = 1920
 SCREEN_SIZE_Y = 1080
 
-MAZE_SIZE_X = 20
-MAZE_SIZE_Y = 20
-CELL_SIZE_X = 50
-CELL_SIZE_Y = 50
+MAZE_SIZE_X = 13
+MAZE_SIZE_Y = 13
+CELL_SIZE_X = 40
+CELL_SIZE_Y = 40
+
+TOP_LEFT_X = (SCREEN_SIZE_X - MAZE_SIZE_X * CELL_SIZE_X) / 2
+TOP_LEFT_Y = (SCREEN_SIZE_Y - MAZE_SIZE_Y * CELL_SIZE_Y) / 2
 
 
 class Cell:
@@ -45,11 +53,14 @@ def update(dt):
             pygame.quit()  # Opposite of pygame.init
             sys.exit()  # Not including this line crashes the script on Windows. Possibly
 
-dasd
-def draw(screen, maze=None):
+
+def draw(screen, maze: list | bool = False,
+         pathfindingPositions: tuple[tuple[int, int], tuple[int, int]] | bool = False):
     screen.fill((0, 0, 0))  # Fill the screen with the blood of my enemies.
-    if maze is not None:
+    if maze:
         drawMaze(maze)
+        if pathfindingPositions:
+            findPath(maze, pathfindingPositions[0], pathfindingPositions[1])
 
     pygame.display.flip()
 
@@ -66,29 +77,46 @@ def drawLine(color: tuple[int, int, int], pos1: tuple[float, float], pos2: tuple
     pygame.draw.line(globals().get("screen"), color, pos1, pos2, 1)
 
 
+def transformMazeToScreenSpace(pos: tuple[float, float]) -> tuple[float, float]:
+    return int(TOP_LEFT_X + pos[0] * CELL_SIZE_X), int(TOP_LEFT_Y + pos[1] * CELL_SIZE_Y)
+
+
+def incrementTupleBy(pTuple: tuple[float, float], scalar1: float, scalar2: float) -> tuple[float, float]:
+    return pTuple[0] + scalar1, pTuple[1] + scalar2
+
+
+def findPath(maze: list, startPos: tuple[int, int], endPos: tuple[int, int]):
+    screen = globals().get("screen")
+    pygame.draw.circle(screen, (0, 0, 255), incrementTupleBy(transformMazeToScreenSpace(startPos), CELL_SIZE_X*.5, -CELL_SIZE_Y*.5), 15)
+    pygame.draw.circle(screen, (0, 255, 0), incrementTupleBy(transformMazeToScreenSpace(endPos), CELL_SIZE_X*.5, -CELL_SIZE_Y*.5), 15)
+
+
 def drawMaze(maze: list):
     screen = globals().get("screen")
-
-    topLeftX = (SCREEN_SIZE_X - (MAZE_SIZE_X+1) * CELL_SIZE_X) / 2
-    topLeftY = (SCREEN_SIZE_Y - (MAZE_SIZE_Y+1) * CELL_SIZE_Y) / 2
 
     dx = 0
     dy = 0
     for row in maze:
         for cell in row:
-            cellX = topLeftX + dx * CELL_SIZE_X
-            cellY = topLeftY + dy * CELL_SIZE_Y
+            cellX = TOP_LEFT_X + dx * CELL_SIZE_X
+            cellY = TOP_LEFT_Y + dy * CELL_SIZE_Y
 
             drawCell(cell, (cellX, cellY))
             dy += 1
         dx += 1
         dy = 0
-    drawLine((255, 0, 0), (topLeftX, topLeftY), (topLeftX + MAZE_SIZE_X * CELL_SIZE_X, topLeftY))
-    drawLine((255, 0, 0), (topLeftX, topLeftY), (topLeftX, topLeftY + MAZE_SIZE_Y * CELL_SIZE_Y))
-    drawLine((255, 0, 0), (topLeftX + MAZE_SIZE_X * CELL_SIZE_X, topLeftY), (topLeftX + MAZE_SIZE_X *
-    CELL_SIZE_X, topLeftY + MAZE_SIZE_Y * CELL_SIZE_Y))
-    drawLine((255, 0, 0), (topLeftX, topLeftY + MAZE_SIZE_X * CELL_SIZE_X), (topLeftX + MAZE_SIZE_X *
-    CELL_SIZE_X, topLeftY + MAZE_SIZE_Y * CELL_SIZE_Y))
+    topLeftBoundingBoxX = TOP_LEFT_X - CELL_SIZE_X
+    topLeftBoundingBoxY = TOP_LEFT_Y - CELL_SIZE_Y
+    drawLine((255, 0, 0), (topLeftBoundingBoxX, topLeftBoundingBoxY),
+             (topLeftBoundingBoxX + (MAZE_SIZE_X + 1) * CELL_SIZE_X, topLeftBoundingBoxY))
+    drawLine((255, 0, 0), (topLeftBoundingBoxX, topLeftBoundingBoxY),
+             (topLeftBoundingBoxX, topLeftBoundingBoxY + (MAZE_SIZE_Y + 1) * CELL_SIZE_Y))
+    drawLine((255, 0, 0), (TOP_LEFT_X + MAZE_SIZE_X * CELL_SIZE_X, topLeftBoundingBoxY),
+             (TOP_LEFT_X + MAZE_SIZE_X *
+              CELL_SIZE_X, TOP_LEFT_Y + MAZE_SIZE_Y * CELL_SIZE_Y))
+    drawLine((255, 0, 0), (topLeftBoundingBoxX, TOP_LEFT_Y + MAZE_SIZE_X * CELL_SIZE_X),
+             (topLeftBoundingBoxX + (MAZE_SIZE_X + 1) *
+              CELL_SIZE_X, TOP_LEFT_Y + MAZE_SIZE_Y * CELL_SIZE_Y))
 
 
 def drawCell(cell: Cell, pos: [float, float]):
@@ -101,6 +129,9 @@ def drawCell(cell: Cell, pos: [float, float]):
 def runPyGame():
     # Initialise PyGame.
     pygame.init()
+
+    startPos = (random.randint(0, MAZE_SIZE_X), random.randint(0, MAZE_SIZE_Y))
+    endPos = (random.randint(0, MAZE_SIZE_X), random.randint(0, MAZE_SIZE_Y))
 
     maze = [[Cell(True, True) for _ in range(MAZE_SIZE_X)] for _ in range(MAZE_SIZE_Y)]
     for row in maze:
@@ -127,16 +158,13 @@ def runPyGame():
     dt = 1 / fps  # dt is the time since last frame.
     while True:  # Loop forever!
         update(dt)  # You can update/draw here, I've just moved the code for neatness.
-        draw(screen, maze)
+        draw(screen, maze, (startPos, endPos))
 
         dt = fps_clock.tick(fps)
 
 
 if __name__ == "__main__":
     runPyGame()
-
-
-
 
 """
 # PyGame template by https://gist.github.com/MatthewJA/7544830/raw/4c579eb08a3c5190b028e96fb3705719b6241c5d/pygame-beginner-template.py
